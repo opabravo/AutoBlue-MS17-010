@@ -133,7 +133,7 @@ class MYSMB(smb.SMB):
             with open(pipes_file) as f:
                 pipes = [ x.strip() for x in f.readlines()]
         except IOError as e:
-            print("[-] Could not open {}, trying hardcoded values".format(pipes_file))
+            print(f"[-] Could not open {pipes_file}, trying hardcoded values")
             pipes = [ 'netlogon', 'lsarpc', 'samr', 'browser', 'spoolss', 'atsvc', 'DAV RPC SERVICE', 'epmapper', 'eventlog', 'InitShutdown', 'keysvc', 'lsass', 'LSM_API_service', 'ntsvcs', 'plugplay', 'protected_storage', 'router', 'SapiServerPipeS-1-5-5-0-70123', 'scerpc', 'srvsvc', 'tapsrv', 'trkwks', 'W32TIME_ALT', 'wkssvc','PIPE_EVENTROOT\CIMV2SCM EVENT PROVIDER', 'db2remotecmd' ]
         tid = self.tree_connect_andx('\\\\'+self.get_remote_host()+'\\'+'IPC$')
         found_pipes = []
@@ -142,16 +142,13 @@ class MYSMB(smb.SMB):
                 fid = self.nt_create_andx(tid, pipe)
                 self.close(tid, fid)
                 found_pipes.append(pipe)
-                print("[+] Found pipe '{}'".format(pipe))
+                print(f"[+] Found pipe '{pipe}'")
                 if firstOnly:
                     break
             except smb.SessionError as e:
                 pass
         self.disconnect_tree(tid)
-        if len(found_pipes) > 0:
-            return found_pipes[0]
-        else:
-            return None
+        return found_pipes[0] if found_pipes else None
 
     def set_pid(self, pid):
         self._pid = pid
@@ -417,8 +414,8 @@ class RemoteShell(cmd.Cmd):
         self.__share = share
         self.__mode = mode
         self.__outputFilename = ''.join([random.choice(string.ascii_letters) for _ in range(4)])
-        self.__output = '\\\\%COMPUTERNAME%\\{}\\{}'.format(self.__share,self.__outputFilename)
-        self.__batchFile = '%TEMP%\\{}.bat'.format(''.join([random.choice(string.ascii_letters) for _ in range(4)]))
+        self.__output = f'\\\\%COMPUTERNAME%\\{self.__share}\\{self.__outputFilename}'
+        self.__batchFile = f"%TEMP%\\{''.join([random.choice(string.ascii_letters) for _ in range(4)])}.bat"
         self.__outputBuffer = b''
         self.__command = ''
         self.__shell = '%COMSPEC% /Q /c '
@@ -498,18 +495,17 @@ class RemoteShell(cmd.Cmd):
             self.transferClient.getFile(self.__share, self.__outputFilename, output_callback)
             self.transferClient.deleteFile(self.__share, self.__outputFilename)
         else:
-            fd = open(SMBSERVER_DIR + '/' + self.__outputFilename,'r')
-            output_callback(fd.read().encode('utf-8'))
-            fd.close()
-            os.unlink(SMBSERVER_DIR + '/' + self.__outputFilename)
+            with open(f'{SMBSERVER_DIR}/{self.__outputFilename}', 'r') as fd:
+                output_callback(fd.read().encode('utf-8'))
+            os.unlink(f'{SMBSERVER_DIR}/{self.__outputFilename}')
 
     def execute_remote(self, data):
-        to_batch = '{} echo {} ^> {} 2^>^&1 > {}'.format(self.__shell, data, self.__output, self.__batchFile)
-        command = '{} & {} {}'.format(to_batch, self.__shell, self.__batchFile)
+        to_batch = f'{self.__shell} echo {data} ^> {self.__output} 2^>^&1 > {self.__batchFile}'
+        command = f'{to_batch} & {self.__shell} {self.__batchFile}'
         if self.__mode == 'SERVER':
-            command += ' & ' + self.__copyBack
-        command = '{} & del {}'.format(command, self.__batchFile )
-        logging.debug('Executing %s' % command)
+            command += f' & {self.__copyBack}'
+        command = f'{command} & del {self.__batchFile}'
+        logging.debug(f'Executing {command}')
         resp = scmr.hRCreateServiceW(self.__scmr, self.__scHandle, self.__serviceName, self.__serviceName,
                                         lpBinaryPathName=command, dwStartType=scmr.SERVICE_DEMAND_START)
         service = resp['lpServiceHandle']
@@ -536,7 +532,7 @@ class SMBServer(Thread):
     def cleanup_server(self):
         logging.info('Cleaning up..')
         try:
-            os.unlink(SMBSERVER_DIR + '/smb.log')
+            os.unlink(f'{SMBSERVER_DIR}/smb.log')
         except:
             pass
         os.rmdir(SMBSERVER_DIR)
@@ -548,7 +544,7 @@ class SMBServer(Thread):
         smbConfig.set('global','server_name','server_name')
         smbConfig.set('global','server_os','UNIX')
         smbConfig.set('global','server_domain','WORKGROUP')
-        smbConfig.set('global','log_file',SMBSERVER_DIR + '/smb.log')
+        smbConfig.set('global', 'log_file', f'{SMBSERVER_DIR}/smb.log')
         smbConfig.set('global','credentials_file','')
 
         # Let's add a dummy share
@@ -571,7 +567,6 @@ class SMBServer(Thread):
             os.mkdir(SMBSERVER_DIR)
         except Exception as e:
             logging.critical(str(e))
-            pass
         logging.info('Setting up SMB Server')
         self.smb.processConfigFile()
         logging.info('Ready to listen...')
