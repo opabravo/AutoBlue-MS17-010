@@ -30,7 +30,7 @@ def check_accessible_pipes(conn):
 
 def main():
     parser = argparse.ArgumentParser()
-    
+
     parser.add_argument('target', action='store',
     help='[[domain/]username[:password]@]<targetName or address>')
 
@@ -50,7 +50,7 @@ def main():
 
     #In case the password contains '@'
     if '@' in remoteName:
-        password = password + '@' + remoteName.rpartition('@')[0]
+        password = f'{password}@' + remoteName.rpartition('@')[0]
         remoteName = remoteName.rpartition('@')[2]
 
     if domain is None:
@@ -67,10 +67,10 @@ def main():
     try:
         conn.login(username, password)
     except smb.SessionError as e:
-        print('[-] Login failed: ' + nt_errors.ERROR_MESSAGES[e.error_code][0])
+        print(f'[-] Login failed: {nt_errors.ERROR_MESSAGES[e.error_code][0]}')
         sys.exit()
     finally:
-        print('[*] Target OS: ' + conn.get_server_os())
+        print(f'[*] Target OS: {conn.get_server_os()}')
 
     tid = conn.tree_connect_andx('\\\\'+options.target_ip+'\\'+'IPC$')
     conn.set_default_tid(tid)
